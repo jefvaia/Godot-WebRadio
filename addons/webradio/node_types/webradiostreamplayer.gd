@@ -1,5 +1,5 @@
-extends AudioStreamPlayer2D
-class_name WebRadioStreamPlayer2D
+extends AudioStreamPlayer
+class_name WebRadioStreamPlayer
 
 @export var url: String
 

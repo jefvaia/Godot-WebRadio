@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://ghk0rdtrvfo"]
+
+[ext_resource type="Script" uid="uid://c7svjy68nt7ge" path="res://addons/webradio/node_types/webradiostreamplayer.gd" id="1_bwxj8"]
+
+[node name="Test" type="AudioStreamPlayer"]
+script = ExtResource("1_bwxj8")
+metadata/_custom_type_script = "uid://c7svjy68nt7ge"
