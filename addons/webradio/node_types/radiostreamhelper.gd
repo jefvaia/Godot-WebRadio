@@ -1,6 +1,6 @@
 extends Node
 
-@export var buffering_length: float = 8
+@export var buffering_length: float = 0.5
 
 func add_radio(url: String) -> HTTPClientInstance:
 	var new_http_client = HTTPClientInstance.new()
