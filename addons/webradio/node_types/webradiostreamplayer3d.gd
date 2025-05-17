@@ -17,7 +17,5 @@ func _ready() -> void:
 	http_instance.buffer_ready.connect(_refresh_stream)
 
 func _refresh_stream(new_stream: AudioStreamMP3):
-	self.set_deferred_thread_group("stream", new_stream)
-	#self.stream = new_stream
-	self.call_deferred_thread_group("play", 0)
-	#self.play(0)
+	self.set_deferred("stream", new_stream)
+	self.call_deferred("play", 0)

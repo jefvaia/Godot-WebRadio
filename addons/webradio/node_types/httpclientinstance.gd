@@ -13,7 +13,7 @@ var kickstart_timer: Timer
 func _ready() -> void:
 	process_thread_group = Node.PROCESS_THREAD_GROUP_SUB_THREAD
 	http_client = HTTPClient.new()
-	http_client.read_chunk_size = 8 * 1024 * 1024
+	http_client.read_chunk_size = 320 / 8 * 1024 * WebRadioStreamHelper.buffering_length
 	
 	var url_parsed = _parse_url(radio_url)
 	if url_parsed["error"] == true:
@@ -77,14 +77,13 @@ func _parse_url(url: String) -> Dictionary:
 	return result
 
 func _emit_buffer() -> void:
-	printt("Created new audiostream")
 	var audio_stream = AudioStreamMP3.new()
 	audio_stream.data = buffer
 	buffer.clear()
 	emit_signal("buffer_ready", audio_stream)
 
 func player_done():
-	_emit_buffer()
+	call_deferred("_emit_buffer")
 
 func _kickstart_callback() -> void:
 	kickstart_timer.queue_free()
