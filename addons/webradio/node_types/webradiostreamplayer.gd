@@ -4,8 +4,6 @@ class_name WebRadioStreamPlayer
 @export var url: String
 
 func _ready() -> void:
-	self.process_thread_group = Node.PROCESS_THREAD_GROUP_SUB_THREAD
-	
 	var http_instance = WebRadioStreamHelper.get_radio(url)
 	
 	if http_instance == null:

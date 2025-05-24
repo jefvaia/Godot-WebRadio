@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3 uid="uid://lexb6fyf2ub4"]
+
+[ext_resource type="Script" uid="uid://c8ynaa6g6dtxt" path="res://addons/webradio/node_types/webradiostreamplayer2d.gd" id="1_iqv1s"]
+
+[node name="WebRadioStreamPlayer2D" type="AudioStreamPlayer2D"]
+volume_db = -32.0
+script = ExtResource("1_iqv1s")
+url = "https://icecast-qmusicnl-cdp.triple-it.nl/Qmusic_nl_nonstop.mp3?aw_0_1st.playerId=redirect"
+metadata/_custom_type_script = "uid://c8ynaa6g6dtxt"
+
+[node name="AudioListener2D" type="AudioListener2D" parent="."]
+current = true

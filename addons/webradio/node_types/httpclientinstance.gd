@@ -11,7 +11,6 @@ var http_client: HTTPClient
 var kickstart_timer: Timer
 
 func _ready() -> void:
-	process_thread_group = Node.PROCESS_THREAD_GROUP_SUB_THREAD
 	http_client = HTTPClient.new()
 	http_client.read_chunk_size = 320 / 8 * 1024 * WebRadioStreamHelper.buffering_length
 	
@@ -87,4 +86,4 @@ func player_done():
 
 func _kickstart_callback() -> void:
 	kickstart_timer.queue_free()
-	_emit_buffer()
+	call_deferred("_emit_buffer")
