@@ -1,15 +1,13 @@
 extends Node
 class_name HTTPClientInstance
 
-signal buffer_ready(buffer: AudioStreamMP3)
+signal buffer_ready(pcm: PackedByteArray)
 
 @export var radio_url: String
 @export var buffer: PackedByteArray
 
 var http_client: HTTPClient
-
-var _queue: Array[AudioStreamMP3] = []
-var _current_stream: AudioStreamMP3 = null
+var decoder: Mp3Decoder = Mp3Decoder.new()
 
 const buffer_time: float = 5
 const buffer_size: int = 320 * 1000 / 8 * buffer_time * 2
@@ -85,20 +83,7 @@ func _parse_url(url: String) -> Dictionary:
 	return result
 
 func _emit_buffer() -> void:
-		var audio_stream = AudioStreamMP3.new()
-		audio_stream.data = buffer
-		buffer.clear()
-		_queue.append(audio_stream)
-		if _current_stream == null:
-				_play_next()
-
-func _play_next() -> void:
-		if _queue.is_empty():
-				return
-		_current_stream = _queue.pop_front()
-		emit_signal("buffer_ready", _current_stream)
-		printt("Emitted buffer")
-
-func player_done() -> void:
-		_current_stream = null
-		call_deferred("_play_next")
+        var pcm = decoder.decode(buffer)
+        buffer.clear()
+        emit_signal("buffer_ready", pcm)
+        printt("Emitted buffer")
