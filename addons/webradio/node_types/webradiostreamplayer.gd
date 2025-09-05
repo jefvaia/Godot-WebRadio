@@ -6,7 +6,6 @@ class_name WebRadioStreamPlayer
 var _http_instance: HTTPClientInstance
 
 func _ready() -> void:
-	self.process_thread_group = Node.PROCESS_THREAD_GROUP_SUB_THREAD
 	_http_instance = WebRadioStreamHelper.get_radio(url)
 	
 	if _http_instance == null:
