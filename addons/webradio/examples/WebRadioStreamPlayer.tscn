@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=2 format=3 uid="uid://ghk0rdtrvfo"]
 
-[ext_resource type="Script" path="res://addons/webradio/node_types/WebRadioStreamPlayer.cs" id="1"]
+[ext_resource type="Script" uid="uid://b5prni5pauu6c" path="res://addons/webradio/node_types/WebRadioStreamPlayer.cs" id="1"]
 
-[node name="WebRadioStreamPlayer" type="AudioStreamPlayer" script=ExtResource("1")]
-url = "https://icecast-qmusicnl-cdp.triple-it.nl/Qmusic_nl_nonstop.mp3?aw_0_1st.playerId=redirect"
+[node name="WebRadioStreamPlayer" type="AudioStreamPlayer"]
+script = ExtResource("1")
+Url = "https://22533.live.streamtheworld.com/TLPSTR06.mp3"
