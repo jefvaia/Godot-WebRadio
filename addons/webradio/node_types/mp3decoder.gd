@@ -10,19 +10,29 @@ var default_channels: int = 2
 var default_sample_rate: int = 48000
 
 func _get_ffmpeg_path() -> String:
+	var ffmpeg_rel := ""
 	match OS.get_name():
 		"Windows":
-			return "res://thirdparty/ffmpeg/windows/ffmpeg.exe"
+			ffmpeg_rel = "thirdparty/ffmpeg/windows/ffmpeg.exe"
 		"Linux", "FreeBSD", "NetBSD":
-			return "res://thirdparty/ffmpeg/linux/ffmpeg"
+			ffmpeg_rel = "thirdparty/ffmpeg/linux/ffmpeg.exe"
 		"macOS":
-			return "res://thirdparty/ffmpeg/macos/ffmpeg"
+			ffmpeg_rel = "thirdparty/ffmpeg/macos/ffmpeg.exe"
 		_:
 			push_error("Unsupported platform for ffmpeg.")
 			return ""
 
+	if Engine.is_editor_hint():
+		# In editor → use res:// path so you can test
+		return ProjectSettings.globalize_path("res://" + ffmpeg_rel)
+	else:
+		# In exported build → expect ffmpeg.exe next to your game exe
+		var exe_dir := OS.get_executable_path().get_base_dir()
+		return exe_dir.path_join("ffmpeg.exe")
+
+
 func decode(mp3_bytes: PackedByteArray, channels: int = default_channels, sample_rate: int = default_sample_rate) -> PackedByteArray:
-	var ff := ProjectSettings.globalize_path(_get_ffmpeg_path())
+	var ff := _get_ffmpeg_path()
 	if ff == "":
 		return PackedByteArray()
 
