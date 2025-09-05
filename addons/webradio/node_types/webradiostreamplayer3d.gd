@@ -8,9 +8,10 @@ var _playback: AudioStreamGeneratorPlayback
 var _frame_queue: Array
 var _queue_mutex: Mutex
 var _push_thread: Thread
-var _thread_running := false
+var _thread_running: bool = false
+var _decoder: Mp3Decoder = Mp3Decoder.new()
 
-const REFILL_THRESHOLD := 1024
+const REFILL_THRESHOLD: int = 1024
 
 func _ready() -> void:
 		_http_instance = WebRadioStreamHelper.get_radio(url)
@@ -18,7 +19,7 @@ func _ready() -> void:
 		if _http_instance == null:
 				_http_instance = WebRadioStreamHelper.add_radio(url)
 
-		var generator := AudioStreamGenerator.new()
+                var generator: AudioStreamGenerator = AudioStreamGenerator.new()
 		generator.mix_rate = 48000
 		generator.buffer_length = 5.0
 		stream = generator
@@ -26,7 +27,7 @@ func _ready() -> void:
 		_playback = get_stream_playback()
 
 		# Preload initial silence to avoid dropouts at start
-		var initial_frames := int(generator.mix_rate * 0.5)
+                var initial_frames: int = int(generator.mix_rate * 0.5)
 		for i in range(initial_frames):
 				_playback.push_frame(Vector2.ZERO)
 
@@ -38,19 +39,22 @@ func _ready() -> void:
 
 		_http_instance.buffer_ready.connect(_refresh_stream)
 
-func _refresh_stream(pcm: PackedByteArray) -> void:
-		if _playback == null:
-				return
-		var local_queue := []
-		var i := 0
-		while i < pcm.size():
-				var left = pcm.decode_s16(i) / 32768.0
-				var right = pcm.decode_s16(i + 2) / 32768.0
-				local_queue.append(Vector2(left, right))
-				i += 4
-		_queue_mutex.lock()
-		_frame_queue += local_queue
-		_queue_mutex.unlock()
+func _refresh_stream(mp3: PackedByteArray) -> void:
+                if _playback == null or mp3.is_empty():
+                                return
+                var pcm: PackedByteArray = _decoder.decode(mp3)
+                if pcm.is_empty():
+                                return
+                var local_queue: Array[Vector2] = []
+                var i: int = 0
+                while i < pcm.size():
+                                var left: float = pcm.decode_s16(i) / 32768.0
+                                var right: float = pcm.decode_s16(i + 2) / 32768.0
+                                local_queue.append(Vector2(left, right))
+                                i += 4
+                _queue_mutex.lock()
+                _frame_queue += local_queue
+                _queue_mutex.unlock()
 
 func _push_frames(userdata) -> void:
 		while _thread_running:
