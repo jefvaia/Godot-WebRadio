@@ -12,11 +12,11 @@ var default_sample_rate: int = 48000
 func _get_ffmpeg_path() -> String:
 	match OS.get_name():
 		"Windows":
-			return "res://third_party/ffmpeg/windows/ffmpeg.exe"
+			return "res://thirdparty/ffmpeg/windows/ffmpeg.exe"
 		"Linux", "FreeBSD", "NetBSD":
-			return "res://third_party/ffmpeg/linux/ffmpeg"
+			return "res://thirdparty/ffmpeg/linux/ffmpeg"
 		"macOS":
-			return "res://third_party/ffmpeg/macos/ffmpeg"
+			return "res://thirdparty/ffmpeg/macos/ffmpeg"
 		_:
 			push_error("Unsupported platform for ffmpeg.")
 			return ""
