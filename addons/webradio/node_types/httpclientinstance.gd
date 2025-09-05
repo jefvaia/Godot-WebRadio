@@ -1,86 +1,63 @@
 extends Node
 class_name HTTPClientInstance
 
-## Emitted once the audio generator is ready for playback.
-signal stream_ready(stream: AudioStreamGenerator)
+signal buffer_ready(buffer: AudioStreamMP3)
 
 @export var radio_url: String
 @export var buffer: PackedByteArray
 
 var http_client: HTTPClient
 
-# Audio generator used to feed PCM data directly to the player.
-var generator: AudioStreamGenerator
-var playback: AudioStreamGeneratorPlayback
+var _queue: Array[AudioStreamMP3] = []
+var _current_stream: AudioStreamMP3 = null
 
 const buffer_time: float = 5
 const buffer_size: int = 320 * 1000 / 8 * buffer_time * 2
-
-# Mix rate for the generated audio. Most MP3 radio streams use 44.1 kHz.
-const mix_rate: int = 44100
+const buffer_emit_threshold: int = 320 * 1000 / 8 * buffer_time
 
 func _ready() -> void:
-
-		while !self.is_inside_tree():
-				await get_tree().process_frame
-
-		http_client = HTTPClient.new()
-		http_client.read_chunk_size = buffer_size
-
-		# Prepare the audio generator and expose it to any listening players.
-		generator = AudioStreamGenerator.new()
-		generator.mix_rate = mix_rate
-		generator.buffer_length = buffer_time
-		emit_signal("stream_ready", generator)
-
-		var url_parsed = _parse_url(radio_url)
-		if url_parsed["error"] == true:
-				self.queue_free()
-				return
-
-		http_client.connect_to_host(str(url_parsed["scheme"], "://", url_parsed["domain"]), url_parsed["port"])
+	
+	while !self.is_inside_tree():
+		await get_tree().process_frame
+	
+	http_client = HTTPClient.new()
+	http_client.read_chunk_size = buffer_size
+	
+	var url_parsed = _parse_url(radio_url)
+	if url_parsed["error"] == true:
+		self.queue_free()
+		return
+	
+	http_client.connect_to_host(str(url_parsed["scheme"], "://", url_parsed["domain"]), url_parsed["port"])
 
 func _process(delta: float) -> void:
-
-		if !self.is_inside_tree():
-				return
-
-		http_client.poll()
-
-		var status = http_client.get_status()
-
-		if status == HTTPClient.STATUS_BODY:
-				_buffer_dat_shit()
-		elif status == HTTPClient.STATUS_CONNECTED:
-				http_client.request(HTTPClient.METHOD_GET, _parse_url(radio_url)["path"], [])
-		elif status == HTTPClient.STATUS_CANT_CONNECT || status == HTTPClient.STATUS_CANT_RESOLVE || status == HTTPClient.STATUS_CONNECTION_ERROR || status == HTTPClient.STATUS_TLS_HANDSHAKE_ERROR || status == HTTPClient.STATUS_DISCONNECTED:
-				push_error(str("Error with connection to stream: ", radio_url))
-				self.queue_free()
-
-		if playback != null and playback.get_frames_available() < mix_rate:
-				# Not enough audio in the buffer; this indicates an underrun.
-				# Additional data will be queued once received in _buffer_dat_shit().
-				pass
+	
+	if !self.is_inside_tree():
+		return
+	
+	http_client.poll()
+	
+	var status = http_client.get_status()
+	
+	if status == HTTPClient.STATUS_BODY:
+		_buffer_dat_shit()
+	elif status == HTTPClient.STATUS_CONNECTED:
+		http_client.request(HTTPClient.METHOD_GET, _parse_url(radio_url)["path"], [])
+	elif status == HTTPClient.STATUS_CANT_CONNECT || status == HTTPClient.STATUS_CANT_RESOLVE || status == HTTPClient.STATUS_CONNECTION_ERROR || status == HTTPClient.STATUS_TLS_HANDSHAKE_ERROR || status == HTTPClient.STATUS_DISCONNECTED:
+		push_error(str("Error with connection to stream: ", radio_url))
+		self.queue_free()
 
 # I just noticed I gave this function this name. Whoops...
 func _buffer_dat_shit() -> void:
-		if !http_client.has_response():
-				return
-
-		var data = http_client.read_response_body_chunk()
-		if data.is_empty():
-				return
-
-		buffer.append_array(data)
-
-		if playback == null:
-				return
-
-		var pcm := _decode_mp3_to_pcm(buffer)
-		for sample in pcm:
-				playback.push_frame(Vector2(sample, sample))
-
-		buffer.clear()
+	if !http_client.has_response():
+		return
+	
+	var data = http_client.read_response_body_chunk()
+	
+	buffer.append_array(data)
+	
+	if buffer.size() >= buffer_emit_threshold:
+		_emit_buffer()
 
 func _parse_url(url: String) -> Dictionary:
 	var result = {
@@ -107,12 +84,21 @@ func _parse_url(url: String) -> Dictionary:
 	
 	return result
 
+func _emit_buffer() -> void:
+		var audio_stream = AudioStreamMP3.new()
+		audio_stream.data = buffer
+		buffer.clear()
+		_queue.append(audio_stream)
+		if _current_stream == null:
+				_play_next()
 
-func set_playback(p: AudioStreamGeneratorPlayback) -> void:
-		playback = p
+func _play_next() -> void:
+		if _queue.is_empty():
+				return
+		_current_stream = _queue.pop_front()
+		emit_signal("buffer_ready", _current_stream)
+		printt("Emitted buffer")
 
-# Placeholder MP3 decoding. This should convert the accumulated MP3 bytes
-# into an array of normalized PCM samples that can be pushed to the generator.
-func _decode_mp3_to_pcm(data: PackedByteArray) -> PackedFloat32Array:
-		# TODO: Implement proper MP3 decoding.
-		return PackedFloat32Array()
+func player_done() -> void:
+		_current_stream = null
+		call_deferred("_play_next")
