@@ -8,6 +8,9 @@ signal buffer_ready(buffer: AudioStreamMP3)
 
 var http_client: HTTPClient
 
+var _queue: Array[AudioStreamMP3] = []
+var _current_stream: AudioStreamMP3 = null
+
 const buffer_size: int = 320 * 1000
 const buffer_emit_threshold: int = 320 * 1000 / 8
 
@@ -81,8 +84,20 @@ func _parse_url(url: String) -> Dictionary:
 	return result
 
 func _emit_buffer() -> void:
-	var audio_stream = AudioStreamMP3.new()
-	audio_stream.data = buffer
-	buffer.clear()
-	emit_signal("buffer_ready", audio_stream)
-	printt("Emitted buffer")
+        var audio_stream = AudioStreamMP3.new()
+        audio_stream.data = buffer
+        buffer.clear()
+        _queue.append(audio_stream)
+        if _current_stream == null:
+                _play_next()
+
+func _play_next() -> void:
+        if _queue.is_empty():
+                return
+        _current_stream = _queue.pop_front()
+        emit_signal("buffer_ready", _current_stream)
+        printt("Emitted buffer")
+
+func player_done() -> void:
+        _current_stream = null
+        _play_next()
