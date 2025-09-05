@@ -1,13 +1,13 @@
 extends Node
 class_name HTTPClientInstance
 
-signal buffer_ready(pcm: PackedByteArray)
+# Emit raw MP3 data to listeners for decoding.
+signal buffer_ready(mp3: PackedByteArray)
 
 @export var radio_url: String
 @export var buffer: PackedByteArray
 
 var http_client: HTTPClient
-var decoder: Mp3Decoder = Mp3Decoder.new()
 
 const buffer_time: float = 5
 const buffer_size: int = 320 * 1000 / 8 * buffer_time * 2
@@ -16,7 +16,7 @@ const buffer_emit_threshold: int = 320 * 1000 / 8 * buffer_time
 func _ready() -> void:
 	http_client = HTTPClient.new()
 	http_client.read_chunk_size = buffer_size
-	var url_parsed := _parse_url(radio_url)
+       var url_parsed: Dictionary = _parse_url(radio_url)
 	if url_parsed["error"]:
 		queue_free()
 		return
@@ -25,7 +25,7 @@ func _ready() -> void:
 	var port : int = url_parsed["port"]
 
 	if url_parsed["scheme"] == "https":
-		var tls := TLSOptions.client()  # default client options
+               var tls: TLSOptions = TLSOptions.client()  # default client options
 		http_client.connect_to_host(host, port, tls)
 	else:
 		http_client.connect_to_host(host, port)  # no TLS
@@ -35,10 +35,10 @@ func _process(_delta: float) -> void:
 		return
 
 	http_client.poll()
-	var status := http_client.get_status()
+       var status: int = http_client.get_status()
 
-	if status == HTTPClient.STATUS_BODY:
-		_buffer_dat_shit()
+        if status == HTTPClient.STATUS_BODY:
+                _buffer_dat_shit()
 	elif status == HTTPClient.STATUS_CONNECTED:
 		var path : String = _parse_url(radio_url)["path"]
 		http_client.request(HTTPClient.METHOD_GET, path, [])
@@ -55,10 +55,10 @@ func _buffer_dat_shit() -> void:
 	
 	var data = http_client.read_response_body_chunk()
 	
-	buffer.append_array(data)
-	
-	if buffer.size() >= buffer_emit_threshold:
-		_emit_buffer()
+        buffer.append_array(data)
+
+        if buffer.size() >= buffer_emit_threshold:
+                _emit_buffer()
 
 func _parse_url(url: String) -> Dictionary:
 	var result = {
@@ -86,15 +86,10 @@ func _parse_url(url: String) -> Dictionary:
 	return result
 
 func _emit_buffer() -> void:
-	var pcm := decoder.decode(buffer)  # blocking ffmpeg call
-	buffer.clear()
-	if pcm.size() > 0:
-		emit_signal("buffer_ready", pcm)
-
-
-func _on_pcm_ready(pcm: PackedByteArray) -> void:
-	emit_signal("buffer_ready", pcm)
-	printt("Emitted buffer")
+       var chunk: PackedByteArray = buffer
+        buffer = PackedByteArray()
+        if chunk.size() > 0:
+                emit_signal("buffer_ready", chunk)
 
 func _exit_tree() -> void:
 	# Nothing special to stop in the blocking version.
