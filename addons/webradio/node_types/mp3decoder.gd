@@ -23,19 +23,22 @@ func _get_ffmpeg_path() -> String:
 			return ""
 
 	if Engine.is_editor_hint():
-		# In editor → use res:// path so you can test
+		# Running in editor → use the res:// copy for this platform
 		return ProjectSettings.globalize_path("res://" + ffmpeg_rel)
 	else:
-		# In exported build → expect ffmpeg.exe next to your game exe
+		# Exported build → expect ffmpeg.exe next to your game exe
 		var exe_dir := OS.get_executable_path().get_base_dir()
 		return exe_dir.path_join("ffmpeg.exe")
+
 
 
 func decode(mp3_bytes: PackedByteArray, channels: int = default_channels, sample_rate: int = default_sample_rate) -> PackedByteArray:
 	var ff := _get_ffmpeg_path()
 	if ff == "":
 		return PackedByteArray()
-
+	
+	printt(ff)
+	
 	# Temporary paths
 	var mp3_path := "user://tmp_input.mp3"
 	var pcm_path := "user://tmp_output.pcm"

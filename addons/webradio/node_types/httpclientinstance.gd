@@ -83,7 +83,7 @@ func _parse_url(url: String) -> Dictionary:
 	return result
 
 func _emit_buffer() -> void:
-        var pcm = decoder.decode(buffer)
-        buffer.clear()
-        emit_signal("buffer_ready", pcm)
-        printt("Emitted buffer")
+		var pcm = decoder.decode(buffer)
+		buffer.clear()
+		emit_signal("buffer_ready", pcm)
+		printt("Emitted buffer")
