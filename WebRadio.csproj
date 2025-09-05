@@ -3,4 +3,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FFMpegCore" Version="5.2.0" />
+  </ItemGroup>
 </Project>
