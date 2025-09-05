@@ -14,11 +14,10 @@ public partial class WebRadioStreamPlayer : AudioStreamPlayer
 
     public override void _Ready()
     {
-        var helper = GetNode<WebRadioStreamHelper>("/root/WebRadioStreamHelper");
-        _httpInstance = helper.GetRadio(Url);
+        _httpInstance = WebRadioStreamHelper.GetRadio(Url);
         if (_httpInstance == null)
         {
-            _httpInstance = helper.AddRadio(Url);
+            _httpInstance = WebRadioStreamHelper.AddRadio(Url);
         }
 
         var generator = new AudioStreamGenerator
