@@ -6,20 +6,6 @@ class_name WebRadioStreamPlayer
 var _http_instance: HTTPClientInstance
 
 func _ready() -> void:
-<<<<<<< Updated upstream
-		self.process_thread_group = Node.PROCESS_THREAD_GROUP_SUB_THREAD
-		_http_instance = WebRadioStreamHelper.get_radio(url)
-
-		if _http_instance == null:
-				_http_instance = WebRadioStreamHelper.add_radio(url)
-
-		finished.connect(_http_instance.player_done)
-		_http_instance.buffer_ready.connect(_refresh_stream)
-
-func _refresh_stream(new_stream: AudioStreamMP3):
-		self.set_deferred("stream", new_stream)
-		self.call_deferred("play", 0)
-=======
 				self.process_thread_group = Node.PROCESS_THREAD_GROUP_SUB_THREAD
 				_http_instance = WebRadioStreamHelper.get_radio(url)
 
@@ -36,4 +22,3 @@ func _on_stream_ready(gen: AudioStreamGenerator) -> void:
 				var pb = self.get_stream_playback()
 				if pb is AudioStreamGeneratorPlayback:
 								_http_instance.set_playback(pb)
->>>>>>> Stashed changes
