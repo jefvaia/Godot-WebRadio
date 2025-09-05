@@ -18,7 +18,37 @@ public partial class HttpClientInstance : Node
 
     public override void _Ready()
     {
+        ConfigureFfmpeg();
         _ = StreamWithFfmpeg();
+    }
+
+    private static void ConfigureFfmpeg()
+    {
+        var osName = OS.GetName().ToLowerInvariant();
+        var baseDir = AppContext.BaseDirectory;
+        var folder = Path.Combine(baseDir, "thirdparty", "ffmpeg", osName);
+        var ffmpegExePath = Path.Combine(folder, "ffmpeg.exe");
+
+        if (osName != "windows")
+        {
+            var ffmpegNoExt = Path.Combine(folder, "ffmpeg");
+            if (!File.Exists(ffmpegNoExt))
+            {
+                try
+                {
+                    File.CreateSymbolicLink(ffmpegNoExt, ffmpegExePath);
+                }
+                catch
+                {
+                    File.Copy(ffmpegExePath, ffmpegNoExt, true);
+                }
+            }
+        }
+
+        GlobalFFOptions.Configure(new FFOptions
+        {
+            BinaryFolder = folder
+        });
     }
 
     private async Task StreamWithFfmpeg()
