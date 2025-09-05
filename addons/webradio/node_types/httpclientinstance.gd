@@ -5,14 +5,19 @@ signal buffer_ready(buffer: AudioStreamMP3)
 
 @export var radio_url: String
 @export var buffer: PackedByteArray
-@export var player_done_connected: bool = false
 
 var http_client: HTTPClient
-var kickstart_timer: Timer
+
+const buffer_size: int = 320 * 1000
+const buffer_emit_threshold: int = 320 * 1000 / 8
 
 func _ready() -> void:
+	
+	while !self.is_inside_tree():
+		await get_tree().process_frame
+	
 	http_client = HTTPClient.new()
-	http_client.read_chunk_size = 320 / 8 * 1024 * WebRadioStreamHelper.buffering_length
+	http_client.read_chunk_size = buffer_size
 	
 	var url_parsed = _parse_url(radio_url)
 	if url_parsed["error"] == true:
@@ -20,12 +25,12 @@ func _ready() -> void:
 		return
 	
 	http_client.connect_to_host(str(url_parsed["scheme"], "://", url_parsed["domain"]), url_parsed["port"])
-	
-	kickstart_timer = Timer.new()
-	kickstart_timer.timeout.connect(_kickstart_callback)
-	self.call_deferred("add_child", kickstart_timer, true)
 
 func _process(delta: float) -> void:
+	
+	if !self.is_inside_tree():
+		return
+	
 	http_client.poll()
 	
 	var status = http_client.get_status()
@@ -42,13 +47,13 @@ func _process(delta: float) -> void:
 func _buffer_dat_shit() -> void:
 	if !http_client.has_response():
 		return
-	if kickstart_timer != null:
-		if kickstart_timer.is_stopped():
-			kickstart_timer.start(WebRadioStreamHelper.buffering_length)
 	
 	var data = http_client.read_response_body_chunk()
 	
 	buffer.append_array(data)
+	
+	if buffer.size() >= buffer_emit_threshold:
+		_emit_buffer()
 
 func _parse_url(url: String) -> Dictionary:
 	var result = {
@@ -80,10 +85,4 @@ func _emit_buffer() -> void:
 	audio_stream.data = buffer
 	buffer.clear()
 	emit_signal("buffer_ready", audio_stream)
-
-func player_done():
-	call_deferred("_emit_buffer")
-
-func _kickstart_callback() -> void:
-	kickstart_timer.queue_free()
-	call_deferred("_emit_buffer")
+	printt("Emitted buffer")
