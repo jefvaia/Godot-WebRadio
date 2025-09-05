@@ -1,13 +1,22 @@
 extends RefCounted
 class_name Mp3Decoder
 
-## Decode an MP3 buffer into raw PCM bytes using ffmpeg.
-## Writes to temp files under user://, then cleans up.
+## Decode MP3 buffers into raw PCM bytes using a long‑lived ffmpeg
+## process. Chunks are fed through stdin and decoded data is pulled
+## from stdout asynchronously.
 ##
 ## Output format: s16le PCM, interleaved (signed 16-bit little endian).
 
+signal pcm_ready(pcm: PackedByteArray)
+
 var default_channels: int = 2
 var default_sample_rate: int = 48000
+
+var _process: Process
+var _thread: Thread
+var _queue: Array[PackedByteArray] = []
+var _mutex := Mutex.new()
+var _running := false
 
 func _get_ffmpeg_path() -> String:
 	var ffmpeg_rel := ""
@@ -32,46 +41,60 @@ func _get_ffmpeg_path() -> String:
 
 
 
-func decode(mp3_bytes: PackedByteArray, channels: int = default_channels, sample_rate: int = default_sample_rate) -> PackedByteArray:
-	var ff := _get_ffmpeg_path()
-	if ff == "":
-		return PackedByteArray()
-	
-	printt(ff)
-	
-	# Temporary paths
-	var mp3_path := "user://tmp_input.mp3"
-	var pcm_path := "user://tmp_output.pcm"
+func _init() -> void:
+        _start_ffmpeg()
 
-	# Save MP3 input
-	var f := FileAccess.open(mp3_path, FileAccess.WRITE)
-	if f == null:
-		push_error("Could not write temp MP3 file")
-		return PackedByteArray()
-	f.store_buffer(mp3_bytes)
-	f.close()
+func _start_ffmpeg(channels: int = default_channels, sample_rate: int = default_sample_rate) -> void:
+        var ff := _get_ffmpeg_path()
+        if ff == "":
+                return
 
-	# Run ffmpeg to decode → raw PCM
-	var args := [
-		"-hide_banner", "-loglevel", "error",
-		"-i", ProjectSettings.globalize_path(mp3_path),
-		"-f", "s16le", "-acodec", "pcm_s16le",
-		"-ac", str(channels), "-ar", str(sample_rate),
-		ProjectSettings.globalize_path(pcm_path)
-	]
+        _process = Process.new()
+        var args := [
+                "-hide_banner", "-loglevel", "error",
+                "-i", "pipe:0",
+                "-f", "s16le", "-acodec", "pcm_s16le",
+                "-ac", str(channels), "-ar", str(sample_rate),
+                "pipe:1"
+        ]
 
-	var exit_code := OS.execute(ff, args, [], true)  # blocking
-	if exit_code != 0:
-		push_error("ffmpeg failed with exit code %d" % exit_code)
-		return PackedByteArray()
+        var err := _process.start(ff, args, true, true, true)
+        if err != OK:
+                push_error("Failed to start ffmpeg: %s" % err)
+                return
 
-	# Read back PCM
-	var pcm := FileAccess.get_file_as_bytes(pcm_path)
+        _running = true
+        _thread = Thread.new()
+        _thread.start(_decode_loop)
 
-	# Clean up
-	if FileAccess.file_exists(mp3_path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(mp3_path))
-	if FileAccess.file_exists(pcm_path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(pcm_path))
+func decode(mp3_bytes: PackedByteArray) -> void:
+        if !_running:
+                return
+        _mutex.lock()
+        _queue.push_back(mp3_bytes.duplicate())
+        _mutex.unlock()
 
-	return pcm
+func _decode_loop() -> void:
+        while _running and _process.is_running():
+                _mutex.lock()
+                if _queue.size() > 0:
+                        var chunk: PackedByteArray = _queue.pop_front()
+                        _process.write(chunk)
+                _mutex.unlock()
+
+                var available := _process.get_read_available()
+                if available > 0:
+                        var pcm := _process.read(available)
+                        emit_signal("pcm_ready", pcm)
+
+                OS.delay_msec(10)
+
+func stop() -> void:
+        _running = false
+        if _thread and _thread.is_started():
+                _thread.wait_to_finish()
+        if _process:
+                _process.close()
+
+func _finalize() -> void:
+        stop()

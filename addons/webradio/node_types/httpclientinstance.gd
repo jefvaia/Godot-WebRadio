@@ -18,8 +18,9 @@ func _ready() -> void:
 	while !self.is_inside_tree():
 		await get_tree().process_frame
 	
-	http_client = HTTPClient.new()
-	http_client.read_chunk_size = buffer_size
+        http_client = HTTPClient.new()
+        http_client.read_chunk_size = buffer_size
+        decoder.pcm_ready.connect(_on_pcm_ready)
 	
 	var url_parsed = _parse_url(radio_url)
 	if url_parsed["error"] == true:
@@ -83,7 +84,13 @@ func _parse_url(url: String) -> Dictionary:
 	return result
 
 func _emit_buffer() -> void:
-		var pcm = decoder.decode(buffer)
-		buffer.clear()
-		emit_signal("buffer_ready", pcm)
-		printt("Emitted buffer")
+                decoder.decode(buffer)
+                buffer.clear()
+
+func _on_pcm_ready(pcm: PackedByteArray) -> void:
+                emit_signal("buffer_ready", pcm)
+                printt("Emitted buffer")
+
+func _exit_tree() -> void:
+                if decoder:
+                        decoder.stop()
