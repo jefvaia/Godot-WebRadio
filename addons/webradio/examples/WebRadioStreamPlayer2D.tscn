@@ -8,5 +8,4 @@ script = ExtResource("1_iqv1s")
 url = "https://icecast-qmusicnl-cdp.triple-it.nl/Qmusic_nl_nonstop.mp3?aw_0_1st.playerId=redirect"
 metadata/_custom_type_script = "uid://c8ynaa6g6dtxt"
 
-[node name="AudioListener2D" type="AudioListener2D" parent="."]
-current = true
+[node name="Camera2D" type="Camera2D" parent="."]
