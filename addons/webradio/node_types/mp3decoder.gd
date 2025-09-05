@@ -12,34 +12,33 @@ signal pcm_ready(pcm: PackedByteArray)
 var default_channels: int = 2
 var default_sample_rate: int = 48000
 
-var _process: Process
+var _pipe: FileAccess
+var _pid: int = -1
 var _thread: Thread
 var _queue: Array[PackedByteArray] = []
 var _mutex := Mutex.new()
 var _running := false
 
 func _get_ffmpeg_path() -> String:
-	var ffmpeg_rel := ""
-	match OS.get_name():
-		"Windows":
-			ffmpeg_rel = "thirdparty/ffmpeg/windows/ffmpeg.exe"
-		"Linux", "FreeBSD", "NetBSD":
-			ffmpeg_rel = "thirdparty/ffmpeg/linux/ffmpeg.exe"
-		"macOS":
-			ffmpeg_rel = "thirdparty/ffmpeg/macos/ffmpeg.exe"
-		_:
-			push_error("Unsupported platform for ffmpeg.")
-			return ""
+        var ffmpeg_rel := ""
+        match OS.get_name():
+                "Windows":
+                        ffmpeg_rel = "thirdparty/ffmpeg/windows/ffmpeg.exe"
+                "Linux", "FreeBSD", "NetBSD":
+                        ffmpeg_rel = "thirdparty/ffmpeg/linux/ffmpeg.exe"
+                "macOS":
+                        ffmpeg_rel = "thirdparty/ffmpeg/macos/ffmpeg.exe"
+                _:
+                        push_error("Unsupported platform for ffmpeg.")
+                        return ""
 
-	if Engine.is_editor_hint():
-		# Running in editor → use the res:// copy for this platform
-		return ProjectSettings.globalize_path("res://" + ffmpeg_rel)
-	else:
-		# Exported build → expect ffmpeg.exe next to your game exe
-		var exe_dir := OS.get_executable_path().get_base_dir()
-		return exe_dir.path_join("ffmpeg.exe")
-
-
+        if Engine.is_editor_hint():
+                # Running in editor → use the res:// copy for this platform
+                return ProjectSettings.globalize_path("res://" + ffmpeg_rel)
+        else:
+                # Exported build → expect ffmpeg.exe next to your game exe
+                var exe_dir := OS.get_executable_path().get_base_dir()
+                return exe_dir.path_join("ffmpeg.exe")
 
 func _init() -> void:
         _start_ffmpeg()
@@ -49,19 +48,21 @@ func _start_ffmpeg(channels: int = default_channels, sample_rate: int = default_
         if ff == "":
                 return
 
-        _process = Process.new()
         var args := [
                 "-hide_banner", "-loglevel", "error",
                 "-i", "pipe:0",
                 "-f", "s16le", "-acodec", "pcm_s16le",
                 "-ac", str(channels), "-ar", str(sample_rate),
-                "pipe:1"
+                "pipe:1",
         ]
 
-        var err := _process.start(ff, args, true, true, true)
-        if err != OK:
-                push_error("Failed to start ffmpeg: %s" % err)
+        var result := OS.execute_with_pipe(ff, args, false)
+        if result.is_empty():
+                push_error("Failed to start ffmpeg.")
                 return
+
+        _pipe = result["stdio"]
+        _pid = result["pid"]
 
         _running = true
         _thread = Thread.new()
@@ -75,16 +76,16 @@ func decode(mp3_bytes: PackedByteArray) -> void:
         _mutex.unlock()
 
 func _decode_loop() -> void:
-        while _running and _process.is_running():
+        while _running and OS.is_process_running(_pid):
                 _mutex.lock()
                 if _queue.size() > 0:
                         var chunk: PackedByteArray = _queue.pop_front()
-                        _process.write(chunk)
+                        _pipe.store_buffer(chunk)
+                        _pipe.flush()
                 _mutex.unlock()
 
-                var available := _process.get_read_available()
-                if available > 0:
-                        var pcm := _process.read(available)
+                var pcm := _pipe.get_buffer(4096)
+                if pcm.size() > 0:
                         emit_signal("pcm_ready", pcm)
 
                 OS.delay_msec(10)
@@ -93,8 +94,10 @@ func stop() -> void:
         _running = false
         if _thread and _thread.is_started():
                 _thread.wait_to_finish()
-        if _process:
-                _process.close()
+        if _pipe:
+                _pipe.close()
+        if _pid != -1 and OS.is_process_running(_pid):
+                OS.kill(_pid)
 
 func _finalize() -> void:
         stop()
