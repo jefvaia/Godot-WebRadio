@@ -16,6 +16,7 @@ const buffer_size: int = 320 * 1000 / 8 * buffer_time * 2
 const buffer_emit_threshold: int = 320 * 1000 / 8 * buffer_time
 
 func _ready() -> void:
+<<<<<<< Updated upstream
 	
 	while !self.is_inside_tree():
 		await get_tree().process_frame
@@ -58,6 +59,69 @@ func _buffer_dat_shit() -> void:
 	
 	if buffer.size() >= buffer_emit_threshold:
 		_emit_buffer()
+=======
+
+		while !self.is_inside_tree():
+				await get_tree().process_frame
+
+		http_client = HTTPClient.new()
+		http_client.read_chunk_size = buffer_size
+
+		# Prepare the audio generator and expose it to any listening players.
+		generator = AudioStreamGenerator.new()
+		generator.mix_rate = mix_rate
+		generator.buffer_length = buffer_time
+		emit_signal("stream_ready", generator)
+
+		var url_parsed = _parse_url(radio_url)
+		if url_parsed["error"] == true:
+				self.queue_free()
+				return
+
+		http_client.connect_to_host(str(url_parsed["scheme"], "://", url_parsed["domain"]), url_parsed["port"])
+
+func _process(delta: float) -> void:
+
+		if !self.is_inside_tree():
+				return
+
+		http_client.poll()
+
+		var status = http_client.get_status()
+
+		if status == HTTPClient.STATUS_BODY:
+				_buffer_dat_shit()
+		elif status == HTTPClient.STATUS_CONNECTED:
+				http_client.request(HTTPClient.METHOD_GET, _parse_url(radio_url)["path"], [])
+		elif status == HTTPClient.STATUS_CANT_CONNECT || status == HTTPClient.STATUS_CANT_RESOLVE || status == HTTPClient.STATUS_CONNECTION_ERROR || status == HTTPClient.STATUS_TLS_HANDSHAKE_ERROR || status == HTTPClient.STATUS_DISCONNECTED:
+				push_error(str("Error with connection to stream: ", radio_url))
+				self.queue_free()
+
+		if playback != null and playback.get_frames_available() < mix_rate:
+				# Not enough audio in the buffer; this indicates an underrun.
+				# Additional data will be queued once received in _buffer_dat_shit().
+				pass
+
+# I just noticed I gave this function this name. Whoops...
+func _buffer_dat_shit() -> void:
+		if !http_client.has_response():
+				return
+
+		var data = http_client.read_response_body_chunk()
+		if data.is_empty():
+				return
+
+		buffer.append_array(data)
+
+		if playback == null:
+				return
+
+		var pcm := _decode_mp3_to_pcm(buffer)
+		for sample in pcm:
+				playback.push_frame(Vector2(sample, sample))
+
+		buffer.clear()
+>>>>>>> Stashed changes
 
 func _parse_url(url: String) -> Dictionary:
 	var result = {
@@ -92,6 +156,7 @@ func _emit_buffer() -> void:
 		if _current_stream == null:
 				_play_next()
 
+<<<<<<< Updated upstream
 func _play_next() -> void:
 		if _queue.is_empty():
 				return
@@ -102,3 +167,13 @@ func _play_next() -> void:
 func player_done() -> void:
 		_current_stream = null
 		call_deferred("_play_next")
+=======
+func set_playback(p: AudioStreamGeneratorPlayback) -> void:
+		playback = p
+
+# Placeholder MP3 decoding. This should convert the accumulated MP3 bytes
+# into an array of normalized PCM samples that can be pushed to the generator.
+func _decode_mp3_to_pcm(data: PackedByteArray) -> PackedFloat32Array:
+		# TODO: Implement proper MP3 decoding.
+		return PackedFloat32Array()
+>>>>>>> Stashed changes
