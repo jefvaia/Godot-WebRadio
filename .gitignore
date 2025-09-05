@@ -14,10 +14,7 @@ export_credentials.cfg
 data_*/
 mono_crash.*.json
 
-# Exe files
-*.exe
-*.dll
-
-# Local FFmpeg binaries
-thirdparty/ffmpeg/**/ffmpeg
-thirdparty/ffmpeg/**/ffmpeg.exe
+# Godot plugin nonesense
+project.godot
+default_bus_layout.tres
+WebRadio.sln
