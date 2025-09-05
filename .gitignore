@@ -17,3 +17,7 @@ mono_crash.*.json
 # Exe files
 *.exe
 *.dll
+
+# Local FFmpeg binaries
+thirdparty/ffmpeg/**/ffmpeg
+thirdparty/ffmpeg/**/ffmpeg.exe
