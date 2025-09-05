@@ -14,37 +14,39 @@ const buffer_size: int = 320 * 1000 / 8 * buffer_time * 2
 const buffer_emit_threshold: int = 320 * 1000 / 8 * buffer_time
 
 func _ready() -> void:
-	
-	while !self.is_inside_tree():
-		await get_tree().process_frame
-	
-        http_client = HTTPClient.new()
-        http_client.read_chunk_size = buffer_size
-        decoder.pcm_ready.connect(_on_pcm_ready)
-	
-	var url_parsed = _parse_url(radio_url)
-	if url_parsed["error"] == true:
-		self.queue_free()
+	http_client = HTTPClient.new()
+	http_client.read_chunk_size = buffer_size
+	var url_parsed := _parse_url(radio_url)
+	if url_parsed["error"]:
+		queue_free()
 		return
-	
-	http_client.connect_to_host(str(url_parsed["scheme"], "://", url_parsed["domain"]), url_parsed["port"])
 
-func _process(delta: float) -> void:
-	
-	if !self.is_inside_tree():
+	var host : String= str(url_parsed["domain"])
+	var port : int = url_parsed["port"]
+
+	if url_parsed["scheme"] == "https":
+		var tls := TLSOptions.client()  # default client options
+		http_client.connect_to_host(host, port, tls)
+	else:
+		http_client.connect_to_host(host, port)  # no TLS
+
+func _process(_delta: float) -> void:
+	if http_client == null:
 		return
-	
+
 	http_client.poll()
-	
-	var status = http_client.get_status()
-	
+	var status := http_client.get_status()
+
 	if status == HTTPClient.STATUS_BODY:
 		_buffer_dat_shit()
 	elif status == HTTPClient.STATUS_CONNECTED:
-		http_client.request(HTTPClient.METHOD_GET, _parse_url(radio_url)["path"], [])
-	elif status == HTTPClient.STATUS_CANT_CONNECT || status == HTTPClient.STATUS_CANT_RESOLVE || status == HTTPClient.STATUS_CONNECTION_ERROR || status == HTTPClient.STATUS_TLS_HANDSHAKE_ERROR || status == HTTPClient.STATUS_DISCONNECTED:
+		var path : String = _parse_url(radio_url)["path"]
+		http_client.request(HTTPClient.METHOD_GET, path, [])
+	elif status == HTTPClient.STATUS_CANT_CONNECT or status == HTTPClient.STATUS_CANT_RESOLVE \
+		or status == HTTPClient.STATUS_CONNECTION_ERROR or status == HTTPClient.STATUS_TLS_HANDSHAKE_ERROR \
+		or status == HTTPClient.STATUS_DISCONNECTED:
 		push_error(str("Error with connection to stream: ", radio_url))
-		self.queue_free()
+		queue_free()
 
 # I just noticed I gave this function this name. Whoops...
 func _buffer_dat_shit() -> void:
@@ -84,13 +86,16 @@ func _parse_url(url: String) -> Dictionary:
 	return result
 
 func _emit_buffer() -> void:
-                decoder.decode(buffer)
-                buffer.clear()
+	var pcm := decoder.decode(buffer)  # blocking ffmpeg call
+	buffer.clear()
+	if pcm.size() > 0:
+		emit_signal("buffer_ready", pcm)
+
 
 func _on_pcm_ready(pcm: PackedByteArray) -> void:
-                emit_signal("buffer_ready", pcm)
-                printt("Emitted buffer")
+	emit_signal("buffer_ready", pcm)
+	printt("Emitted buffer")
 
 func _exit_tree() -> void:
-                if decoder:
-                        decoder.stop()
+	# Nothing special to stop in the blocking version.
+	pass
