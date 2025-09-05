@@ -1,6 +1,11 @@
 using Godot;
+using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using FFMpegCore;
+using FFMpegCore.Pipes;
 
 [GlobalClass]
 public partial class HttpClientInstance : Node
@@ -11,113 +16,86 @@ public partial class HttpClientInstance : Node
     [Export]
     public string RadioUrl { get; set; } = "";
 
-    private List<byte> _buffer = new List<byte>();
-    private HttpClient _httpClient;
-    private Mp3Decoder _decoder = new Mp3Decoder();
-
-    private const float BufferTime = 5f;
-    private const int BufferSize = 320 * 1000 / 8 * (int)BufferTime * 2;
-    private const int BufferEmitThreshold = 320 * 1000 / 8 * (int)BufferTime;
-
     public override void _Ready()
     {
-        _httpClient = new HttpClient();
-        _httpClient.ReadChunkSize = BufferSize;
-
-        var parsed = ParseUrl(RadioUrl);
-        if (parsed.Error)
-        {
-            QueueFree();
-            return;
-        }
-
-        string host = parsed.Domain;
-        int port = parsed.Port;
-
-        if (parsed.Scheme == "https")
-        {
-            var tls = TlsOptions.Client();
-            _httpClient.ConnectToHost(host, port, tls);
-        }
-        else
-        {
-            _httpClient.ConnectToHost(host, port);
-        }
+        _ = StreamWithFfmpeg();
     }
 
-    public override void _Process(double delta)
+    private async Task StreamWithFfmpeg()
     {
-        if (_httpClient == null)
-            return;
+        var pcmStream = new PcmPipeStream(chunk =>
+            CallDeferred(nameof(EmitPcm), chunk));
 
-        _httpClient.Poll();
-        var status = _httpClient.GetStatus();
-
-        if (status == HttpClient.Status.Body)
-        {
-            BufferData();
-        }
-        else if (status == HttpClient.Status.Connected)
-        {
-            var path = ParseUrl(RadioUrl).Path;
-            _httpClient.Request(HttpClient.Method.Get, path, new string[]{});
-        }
-        else if (status == HttpClient.Status.CantConnect ||
-                 status == HttpClient.Status.CantResolve ||
-                 status == HttpClient.Status.ConnectionError ||
-                 status == HttpClient.Status.TlsHandshakeError ||
-                 status == HttpClient.Status.Disconnected)
-        {
-            GD.PushError($"Error with connection to stream: {RadioUrl}");
-            QueueFree();
-        }
+        await FFMpegArguments
+            .FromUrlInput(new Uri(RadioUrl))
+            .OutputToPipe(new StreamPipeSink(pcmStream), options => options
+                .WithAudioCodec("pcm_s16le")
+                .WithCustomArgument("-ac 2")
+                .WithAudioSamplingRate(48000)
+                .ForceFormat("s16le"))
+            .ProcessAsynchronously();
     }
 
-    private void BufferData()
+    private void EmitPcm(byte[] pcm)
     {
-        if (!_httpClient.HasResponse())
-            return;
-
-        var data = _httpClient.ReadResponseBodyChunk();
-        if (data.Length == 0)
-            return;
-        _buffer.AddRange(data);
-
-        if (_buffer.Count >= BufferEmitThreshold)
-            EmitBuffer();
+        EmitSignal(SignalName.PcmReady, pcm);
     }
 
-    private void EmitBuffer()
+    private class PcmPipeStream : Stream
     {
-        var chunk = _buffer.ToArray();
-        _buffer.Clear();
-        if (chunk.Length > 0)
+        private readonly Action<byte[]> _onChunk;
+        private readonly List<byte> _buffer = new();
+        private const int EmitSize = 4096;
+
+        public PcmPipeStream(Action<byte[]> onChunk)
         {
-            byte[] pcmBytes = _decoder.Decode(chunk);
-            if (pcmBytes.Length > 0)
+            _onChunk = onChunk;
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            for (int i = offset; i < offset + count; i++)
             {
-                EmitSignal(SignalName.PcmReady, pcmBytes);
+                _buffer.Add(buffer[i]);
+                if (_buffer.Count >= EmitSize)
+                {
+                    EmitChunk();
+                }
             }
         }
-    }
 
-    private (string Scheme, string Domain, int Port, string Path, bool Error) ParseUrl(string url)
-    {
-        var result = (Scheme: "", Domain: "", Port: 0, Path: "", Error: false);
-        var regex = new Regex(@"^(https?)://([^/:]+)(?::(\d+))?(.*)$");
-        var match = regex.Match(url);
-        if (match.Success)
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            result.Scheme = match.Groups[1].Value;
-            result.Domain = match.Groups[2].Value;
-            result.Port = match.Groups[3].Success && match.Groups[3].Value != "" ? int.Parse(match.Groups[3].Value) : (result.Scheme == "https" ? 443 : 80);
-            result.Path = match.Groups[4].Success && match.Groups[4].Value != "" ? match.Groups[4].Value : "/";
+            Write(buffer, offset, count);
+            return Task.CompletedTask;
         }
-        else
+
+        private void EmitChunk()
         {
-            GD.PushError($"Invalid URL format: {url}");
-            result.Error = true;
+            var chunk = _buffer.GetRange(0, EmitSize).ToArray();
+            _buffer.RemoveRange(0, EmitSize);
+            _onChunk(chunk);
         }
-        return result;
+
+        public override void Flush()
+        {
+            if (_buffer.Count > 0)
+            {
+                var chunk = _buffer.ToArray();
+                _buffer.Clear();
+                _onChunk(chunk);
+            }
+        }
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => 0;
+        public override long Position { get => 0; set { } }
+
+        public override int Read(byte[] buffer, int offset, int count) => 0;
+        public override long Seek(long offset, SeekOrigin origin) => 0;
+        public override void SetLength(long value) { }
     }
 }
+
