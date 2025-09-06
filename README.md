@@ -19,7 +19,3 @@ This tool allows you to play web-radio streams in Godot.
 - Ffmpeg decoding
 - Seamless streaming
 - Both normal, 2d and 3d playback
-
-## To-Do
-
-- Add AAC encoding
